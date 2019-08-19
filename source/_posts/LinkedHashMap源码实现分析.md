@@ -10,13 +10,15 @@ tags:
 - Doubly-linked List
 ---
 
+### 简介
+键值对的`Map接口`的实现，支持`get`, `put`等些基本操作`O(1)`时间复杂度的支持，允许`null`的`mapping`，但与`HashMap`不同的一点是，其支持按照`mapping`被添加进来的顺序进行遍历。还有特殊的一点，如果该`map`是以`access-ordered`方式构建的，可以用来构建简单的`LRU(最近最少使用)`的缓存，在满足一定条件时，`map` 自动淘汰一些过期元素
 
 ### 基本描述
-- 基于HashMap和链表并且具有可预知遍历顺序的Map接口实现，遍历顺序与mapping被添加进来时的顺序一致。跟HashMap不同之处在于，它维护一个运行于所有实体中的双链表，该链表定义了遍历的顺序
-- 需要注意的是，如果重新插入一个key，插入顺序不会受到影响(这里指的应该是accessOrder=false的情景)
-- 提供一个特别的构造方法，能够提供遍历顺序按照最少使用(least-recently)到最常使用(most-recently)，这种类型的Map比较符合构建LRU缓存的需求。` removeEldestEntry(Map.Entry) `方法可能需要被重写，从而在有新的mapping增加时，提供一个策略来自动删除比较旧的元素
-- 跟HashMap类似，允许空的元素，一些基本的操作(add, contains and remove)提供常量时间的性能，对比于HashMap，因为维护双链表需要开销，不过性能只稍微低于HashMap（不过有一个地方除外: 全局遍历的性能比HashMap的要好，LinkedHashMap只需要遍历链表，而HashMap需要遍历整个桶）
-- 非同步，可使用装饰模式`Map m = Collections.synchronizedMap(new LinkedHashMap(...))`将其转换为同步的map
+- 基于`HashMap`和`双链表`并且具有可预知遍历顺序的`Map接口`实现，遍历顺序与`mapping`被添加进来时的顺序一致。跟HashMap不同之处在于，它维护一个运行于所有实体中的双链表，该链表定义了遍历的顺序
+- 需要注意的是，如果重新插入一个`key`，插入顺序不会受到影响(这里指的应该是`accessOrder=false`的情景)
+- 提供一个特别的构造方法，能够提供遍历顺序按照最少使用(`least-recently`)到最常使用(`most-recently`)，这种类型的Map比较符合构建LRU缓存的需求。` removeEldestEntry(Map.Entry) `方法可能需要被重写，从而在有新的mapping增加时，提供一个策略来自动删除比较旧的元素
+- 跟HashMap类似，允许空的元素，一些基本的操作`(add, contains and remove)`提供常量时间的性能，对比于`HashMap`，因为维护双链表需要开销，不过性能只稍微低于`HashMap`（不过有一个地方除外: 全局遍历的性能比`HashMap`的要好，`LinkedHashMap`只需要遍历链表，而`HashMap`需要遍历整个桶）
+- 非同步，可使用装饰模式`Map m = Collections.synchronizedMap(new LinkedHashMap(...))`将其转换为同步的`map`
 - 在迭代遍历Map时，如果map内部结构发生修改，则会引起`fail-fast`，抛出`ConcurrentModificationException`异常。特别的一点，具有访问顺序(`access-ordered`)要求的map，仅仅是简单的查询方法例如: `get函数`也会引起内部结构的变化
 
 
@@ -66,7 +68,7 @@ e.before = null;
 e.next = null;
 ```
 
-#### `linkNodeLast(LinkedHashMap.Entry<K,V> p) `函数
+#### linkNodeLast(LinkedHashMap.Entry<K,V> p)函数
 将当前节点p添加到双链表的尾部
 ```java
 /**
@@ -189,7 +191,8 @@ class LRUCache {
         // 设置桶的初始容量为: cap / 0.75 + 1
         cache = new LinkedHashMap<Integer, Integer>((int)(capacity/0.75) + 1, 0.75F, true) {
                 @Override
-                protected boolean removeEldestEntry(Map.Entry<Integer, Integer> eldest) {
+                public boolean removeEldestEntry(Map.Entry<Integer, Integer> eldest) {
+                    // 当新增元素后cache的大小大于允许的最大容量时，淘汰旧元素
                     return cache.size() > capacity;
                 }
             };
