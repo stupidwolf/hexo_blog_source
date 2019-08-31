@@ -9,8 +9,12 @@ tags:
 ---
 
 
+基于`jdk11`源码分析哈希表的实现，主要包含：哈希表的内部储存的数据结构是怎样的？哈希表是如何让`get`,`put`等些操作在常数时间内实现的，在当前哈希表"满"时，哈希表是如何进行扩容(`resize`)的？`负载因子(load factor)`与`容量(capacity)`这2个重要指标是如何影响哈希表的性能的？哈希表是如何让各个`元素(element or entry)`比较均与地散落在各个`桶(bucket)`上的？当存在较多冲突时，新版`jdk`的`HashMap`是如何优化的？
+
+<!-- more -->
 
 ### 名词解释
+在分析之前，先初步了解下下面文中用到的一些名词：
 
 | 名词                  | 解释                                                         |
 | --------------------- | :----------------------------------------------------------- |
@@ -29,18 +33,57 @@ tags:
 - 假设哈希方法(hash function)能够适当地离散各个元素(element)到各个桶(buckets)，基本操作(put,get)提供常数时间的性能
 - 遍历集合视图的时间跟桶的容量(capacity)成正比例关系，如果依赖于遍历的性能，一个很重要的点是桶的容量(capacity)不要设置过大或者负载因子(load factor)别设置过小
 - 有2个参数影响HashMap的性能：初始化容量(initial capacity)以及负载因子(load factor)。在当前HashMap中的实体总量超过负载因子和容量的乘积时，哈希表将会进行再哈希操作
+- 为了避免在遍历哈希表的同时因为哈希表内部结构被并发的修改(新增或者删除操作)而引起的一些不确定的问题，采用`fail-fast`机制，在遇到并发修改时，直接抛出`ConcurrentModificationException`异常
 
 
 
 ### 类图关系
 
-![hash map uml image](HashMap源码原理及实现/hash_map_uml.png)
+![hash map uml image](learn-about-hash-map-jdk11/hash_map_uml.png)
 
+### 内部存储的数据结构
 
+`HashMap`内部由连续的桶(数组，长度等于`capacity`属性，2^n，最大为2^30)以及链表或者红黑树组成，正常情况下，在单个桶上遇到哈希冲突时(不同的哈希被离散到同一个桶上)，是采用链表来解决哈希冲突的，最新被插入的元素被放到链表的末尾。不过，在当个桶包含的元素数量过大时(超过8个)，为了优化查找效率(假设一个桶上包含n个元素，若使用链表结构，在进行查询等些操作时需要O(n)的时间复杂度，然而将其装换为红黑树之后，这些操作只需要O(log n)的时间复杂度)，使用红黑树进行储存。`HashMap`的数据结构大致如下图所示:
 
+![HashMap-img](learn-about-hash-map-jdk11/hash-map-img.png)
 
+从源码的文档中可以看到，在随机的`hashCode`下，各个桶上所包含的元素数量大致符合`(exp(-0.5)*pow(0.5,k)/factorial(k)`的[泊松分布](http://en.wikipedia.org/wiki/Poisson_distribution)，各个元素出现的概率如下：
+```
+* 0:    0.60653066
+* 1:    0.30326533
+* 2:    0.07581633
+* 3:    0.01263606
+* 4:    0.00157952
+* 5:    0.00015795
+* 6:    0.00001316
+* 7:    0.00000094
+* 8:    0.00000006
+* more: less than 1 in ten million
+```
+可以看到，当个桶上包含的元素数量大于8的概率是小于千万分之一的。
 
 ### 源码细节
+
+
+#### hash函数
+
+- 对key的hashCode()进行处理,高16位不变,但将其key的高16位与低16位进行异或处理,避免因为高位没有参与到下标的计算,从而引起的冲突，jdk源码上是这样描述的：
+
+> Because the table uses power-of-two masking, sets of hashes that vary only in bits above the current mask will always collide. (Among known examples are sets of Float keys holding consecutive whole numbers in small tables.) 
+
+```java
+static final int hash(Object key) {
+    int h;
+    return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+}
+
+// 在根据key定位桶的位置时使用: tab[(n - 1) & hash])
+```
+
+整个处理过程,大致如下:
+
+![hash function detail image](learn-about-hash-map-jdk11/hash_func_during_running_image.png)
+
 
 #### put函数
 
@@ -134,7 +177,7 @@ final Node<K,V> getNode(int hash, Object key) {
             if (first instanceof TreeNode)
                 return ((TreeNode<K,V>)first).getTreeNode(hash, key);
             do {
-            // 在二叉树上查询
+            // 在链表上查询
                 if (e.hash == hash &&
                     ((k = e.key) == key || (key != null && key.equals(k))))
                     return e;
@@ -144,31 +187,6 @@ final Node<K,V> getNode(int hash, Object key) {
     return null;
 }
 ```
-
-
-
-#### hash函数
-
-- 对key的hashCode()进行处理,高16位不变,但将其key的高16位与低16位进行异或处理,避免因为高位没有参与到下标的计算,从而引起的冲突
-
-
-
-```java
-static final int hash(Object key) {
-    int h;
-    return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
-}
-
-// 在根据key定位桶的位置时使用: tab[(n - 1) & hash])
-```
-
-
-
-整个处理过程,大致如下:
-
-![hash function detail image](./HashMap源码原理及实现/hash_func_during_running_image.png)
-
-
 
 #### resize 函数
 
@@ -263,10 +281,13 @@ final Node<K,V>[] resize() {
 
 
 ### 扩展知识
+- Float类型的表示(共4字节,32bit) -- `符号位(1) 阶码(8) 尾数位(23)`
 
-- 泊松分布
-- 红黑树
+- Double类型的表示(共8字节,64bit) -- `符号位(1) 阶码(11) 尾数位(52)`
 
+- [泊松分布](http://en.wikipedia.org/wiki/Poisson_distribution)
+
+- {% post_link 红黑树 %} 
 
 
 ### 参考链接

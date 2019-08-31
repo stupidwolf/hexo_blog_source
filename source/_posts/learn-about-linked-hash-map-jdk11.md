@@ -10,8 +10,9 @@ tags:
 - Doubly-linked List
 ---
 
-### 简介
-键值对的`Map接口`的实现，支持`get`, `put`等些基本操作`O(1)`时间复杂度的支持，允许`null`的`mapping`，但与`HashMap`不同的一点是，其支持按照`mapping`被添加进来的顺序进行遍历。还有特殊的一点，如果该`map`是以`access-ordered`方式构建的，可以用来构建简单的`LRU(最近最少使用)`的缓存，在满足一定条件时，`map` 自动淘汰一些过期元素
+`LinkedHashMap`是基于`HashMap`实现的子类，支持`get`, `put`等些基本操作`O(1)`时间复杂度的支持，允许`null`的`mapping`，但与`HashMap`不同的一点是，其支持按照`mapping`被添加进来的顺序进行遍历(底层使用额外的双链表储存了各个被添加的元素)。还有特殊的一点，如果该`map`是以`access-ordered`方式构建的，可以用来构建简单的`LRU(最近最少使用)`的缓存，在满足一定条件时，`map` 自动淘汰一些过期元素
+
+<!-- more -->
 
 ### 基本描述
 - 基于`HashMap`和`双链表`并且具有可预知遍历顺序的`Map接口`实现，遍历顺序与`mapping`被添加进来时的顺序一致。跟HashMap不同之处在于，它维护一个运行于所有实体中的双链表，该链表定义了遍历的顺序
@@ -23,7 +24,7 @@ tags:
 
 
 ### 类图结构
-![class-uml-img](LinkedHashMap源码实现分析/class-uml.png)
+![class-uml-img](learn-about-linked-hash-map-jdk11/class-uml.png)
 
 
 ### 内部数据结构
@@ -38,7 +39,7 @@ map.put("English", "88");
 
 在LinkedHashMap内部，里面桶以及双链表的结构如下图:
 
-![](LinkedHashMap源码实现分析/inner-ds-img.png)
+![](learn-about-linked-hash-map-jdk11/inner-ds-img.png)
 
 遍历map时，将直接遍历双链表，顺序与被插入的顺序一致:
 ```
